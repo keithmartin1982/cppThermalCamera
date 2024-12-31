@@ -29,19 +29,30 @@ int main(int argc, char **argv) {
     bool tempConv = false;
     bool recording = false;
     std::vector<int> colormaps = {
+        cv::ColormapTypes::COLORMAP_AUTUMN,
         cv::ColormapTypes::COLORMAP_BONE,
         cv::ColormapTypes::COLORMAP_JET,
-        cv::ColormapTypes::COLORMAP_RAINBOW,
-        cv::ColormapTypes::COLORMAP_HSV,
-        cv::ColormapTypes::COLORMAP_AUTUMN,
         cv::ColormapTypes::COLORMAP_WINTER,
+        cv::ColormapTypes::COLORMAP_RAINBOW,
         cv::ColormapTypes::COLORMAP_OCEAN,
         cv::ColormapTypes::COLORMAP_SUMMER,
         cv::ColormapTypes::COLORMAP_SPRING,
         cv::ColormapTypes::COLORMAP_COOL,
+        cv::ColormapTypes::COLORMAP_HSV,
         cv::ColormapTypes::COLORMAP_PINK,
-        cv::ColormapTypes::COLORMAP_HOT
+        cv::ColormapTypes::COLORMAP_HOT,
+        cv::ColormapTypes::COLORMAP_PARULA,
+        cv::ColormapTypes::COLORMAP_MAGMA,
+        cv::ColormapTypes::COLORMAP_INFERNO,
+        cv::ColormapTypes::COLORMAP_PLASMA,
+        cv::ColormapTypes::COLORMAP_VIRIDIS,
+        cv::ColormapTypes::COLORMAP_CIVIDIS,
+        cv::ColormapTypes::COLORMAP_TWILIGHT,
+        cv::ColormapTypes::COLORMAP_TWILIGHT_SHIFTED,
+        cv::ColormapTypes::COLORMAP_TURBO,
+        cv::ColormapTypes::COLORMAP_DEEPGREEN,
     };
+    int colormapsLen = static_cast<int>(colormaps.size());
     int deviceInt{std::stoi(argv[1])};
     std::cout << "Opening device: " << deviceInt << std::endl;
     cv::VideoCapture cap(deviceInt); // 0 is the default camera
@@ -106,8 +117,7 @@ int main(int argc, char **argv) {
                 return 0;
                 break;
             case 'm':
-                std::cout << "Applying map: " << colormaps[mapInt] << std::endl;
-                if (mapInt == 11) {
+                if (mapInt == colormapsLen-1) {
                     mapInt = 0;
                 } else {
                     mapInt++;
