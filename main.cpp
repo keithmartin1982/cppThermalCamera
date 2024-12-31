@@ -1,10 +1,33 @@
 #include <opencv2/opencv.hpp>
 #include <iostream>
 #include <vector>
+#include <sstream>
+#include <string>
+#include <iomanip>
+#include <chrono>
+#include <ctime>
+
+std::string generateTimestampedFilename() {
+    auto now = std::chrono::system_clock::now();
+    std::time_t now_time = std::chrono::system_clock::to_time_t(now);
+    std::tm tm = *std::localtime(&now_time);
+    std::ostringstream oss;
+    oss << std::put_time(&tm, "%Y%m%d_%H%M%S") << ".png";
+    return oss.str();
+}
 
 int main(int argc, char **argv) {
+    std::cout << R"(keymap:
+    z x | scale image + -
+     m  | cycle through Colormaps
+     p  | save frame to file
+    r t | record / stop (Not Implemented!)
+     q  | quit
+     )" << std::endl;
     int mapInt = 0;
     int scale = 2;
+    bool tempConv = false;
+    bool recording = false;
     std::vector<int> colormaps = {
         cv::ColormapTypes::COLORMAP_BONE,
         cv::ColormapTypes::COLORMAP_JET,
@@ -43,8 +66,16 @@ int main(int argc, char **argv) {
         // Extract thermal data /////////////////////
         uint16_t centerPixel = thermalMat.at<uint16_t>(96, 128);
         uint16_t gray16leValue = centerPixel;
+        std::string tempFormat;
+        float vTemp;
         float cTemp = gray16leValue / 64 - 273.15;
-        float fTemp = (cTemp * 9 / 5) + 32;
+        if (tempConv) {
+            tempFormat = " F";
+            vTemp = (cTemp * 9 / 5) + 32;
+        } else {
+            tempFormat = " C";
+            vTemp = cTemp;
+        }
         // end temp data extraction ////////////////////
         cv::Mat matRGB;
         cv::cvtColor(visibleMat, matRGB, cv::COLOR_YUV2BGR_YUYV);
@@ -53,11 +84,15 @@ int main(int argc, char **argv) {
         // scale mat
         cv::Mat scaledImage;
         cv::resize(colormapped, scaledImage, cv::Size(256 * scale, 192 * scale), 0, 0, cv::INTER_NEAREST);
-        // Overlay elements
-        std::string tempText = std::to_string(fTemp) + " F";
+        //// Overlay elements
+        // Convert temp float
+        std::ostringstream oss;
+        oss.precision(2);
+        oss << std::fixed << vTemp;
+        std::string tempText = oss.str() + tempFormat;
         // cv::putText(&mat, text, cv::Point(50, 180), cv::FONT_HERSHEY_SIMPLEX, fontScale, cv::Scalar(255, 255, 255), size);
-        cv::putText(scaledImage, tempText, cv::Point(5 * scale, 5 * scale), cv::FONT_HERSHEY_SIMPLEX, 0.4, cv::Scalar(0, 0, 0), 2);
-        cv::putText(scaledImage, tempText, cv::Point(5 * scale, 5 * scale), cv::FONT_HERSHEY_SIMPLEX, 0.4, cv::Scalar(255, 255, 255), 1);
+        cv::putText(scaledImage, tempText, cv::Point(5, 10), cv::FONT_HERSHEY_SIMPLEX, 0.4, cv::Scalar(0, 0, 0), 2);
+        cv::putText(scaledImage, tempText, cv::Point(5, 10), cv::FONT_HERSHEY_SIMPLEX, 0.4, cv::Scalar(255, 255, 255), 1);
         cv::circle(scaledImage, cv::Point(128 * scale, 96 * scale), 1, cv::Scalar(0, 0, 0), 2);
         cv::circle(scaledImage, cv::Point(128 * scale, 96 * scale), 1, cv::Scalar(255, 255, 255), 1);
         cv::imshow("Webcam", scaledImage);
@@ -87,10 +122,25 @@ int main(int argc, char **argv) {
                 }
                 break;
             case 'p':
-                if (!cv::imwrite("output.png", scaledImage)) {
+                if (!cv::imwrite(generateTimestampedFilename(), scaledImage)) {
                         std::cerr << "Could not save image!" << std::endl;
                         return -1;
                     }
+                break;
+            case 'w':
+                if (tempConv) {
+                    tempConv = false;
+                } else {
+                    tempConv = true;
+                }
+                break;
+            case 'r':
+                recording = true;
+                std::cerr << "Not Implemented!" << std::endl;
+                break;
+            case 't':
+                recording = false;
+                std::cerr << "Not Implemented!" << std::endl;
                 break;
         }
     }
