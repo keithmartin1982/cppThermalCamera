@@ -5,6 +5,7 @@
 #include <string>
 #include <iomanip>
 #include <chrono>
+#include <tuple>
 #include <ctime>
 
 std::string timestampFilename(std::string label) {
@@ -17,7 +18,7 @@ std::string timestampFilename(std::string label) {
 }
 
 std::string getThermalValue(cv::Mat image, int x, int y, bool conv) {
-    cv::Vec2w centerPixel = image.at<cv::Vec2w>(y, x); // a -32 offset of x-axis
+    uint16_t* centerPixel = image.ptr<uint16_t>(y, x); // a -32 offset of x-axis
     uint16_t thermValueLow = centerPixel[0];
     uint16_t thermValueHigh = centerPixel[1];
     std::string tempFormat;
@@ -35,6 +36,23 @@ std::string getThermalValue(cv::Mat image, int x, int y, bool conv) {
     return oss.str();
 }
 
+std::tuple<int, int>  getValues(cv::Mat img) {
+    int16_t highestValue = 0;
+    int highestX;
+    int highestY;
+    for (int y = 0; y < img.rows; ++y) {
+        for (int x = 0; x < img.cols; ++x) {
+            uint16_t pixelValue = img.at<uint16_t>(y, x);
+            if (pixelValue > highestValue) {
+                highestValue = pixelValue;
+                highestX = x;
+                highestY = y;
+            }
+        }
+    }
+    return std::make_tuple(highestX, highestY);
+}
+
 int main(int argc, char **argv) {
     std::cout << R"(keymap:
      w  | toggle temp conversion
@@ -44,6 +62,7 @@ int main(int argc, char **argv) {
     r t | record / stop (Not Implemented Yet!)
      q  | quit
      )" << std::endl;
+    int offset = 32;
     int mapInt = 0;
     int scale = 2;
     bool tempConv = true;
@@ -90,6 +109,12 @@ int main(int argc, char **argv) {
             std::cerr << "Error: Could not grab a frame." << std::endl;
             break;
         }
+        // get thermal mat
+        cv::Rect bottomHalf(0, frame.rows / 2 , frame.cols, frame.rows / 2);
+        cv::Mat thermalMat = frame(bottomHalf);
+        // TODO : get low values
+        // Get hi low locations
+        auto [hX, hY] = getValues(thermalMat);
         // set top visible rect
         cv::Rect topHalf(0, 0, 256, 192);
         cv::Mat visibleMat = frame(topHalf);
@@ -103,10 +128,18 @@ int main(int argc, char **argv) {
         cv::Mat scaledImage;
         cv::resize(colormapped, scaledImage, cv::Size(256 * scale, 192 * scale), 0, 0, cv::INTER_CUBIC);
         // get center thermal value
-        std::string centerThermalValue = getThermalValue(frame, 64, 288, tempConv);
+        std::string centerThermalValue = getThermalValue(thermalMat, 128, 96, tempConv);
         // display thermal value
         cv::putText(scaledImage, centerThermalValue, cv::Point(5, 10), cv::FONT_HERSHEY_SIMPLEX, 0.4, cv::Scalar(0, 0, 0), 2);
         cv::putText(scaledImage, centerThermalValue, cv::Point(5, 10), cv::FONT_HERSHEY_SIMPLEX, 0.4, cv::Scalar(255, 255, 255), 1);
+        // highest temp dot
+        cv::circle(scaledImage, cv::Point(hX * scale, hY * scale), 1, cv::Scalar(0, 0, 0), 2);
+        cv::circle(scaledImage, cv::Point(hX * scale, hY * scale), 1, cv::Scalar(255, 255, 255), 1);
+        // get temp at highest point
+        std::string highestThermalValue = getThermalValue(thermalMat, hX, hY, tempConv);
+        // highest text
+        cv::putText(scaledImage, highestThermalValue, cv::Point((hX + 2) * scale, (hY + 10) * scale), cv::FONT_HERSHEY_SIMPLEX, 0.4, cv::Scalar(0, 0, 0), 2);
+        cv::putText(scaledImage, highestThermalValue, cv::Point((hX + 2) * scale, (hY + 10) * scale), cv::FONT_HERSHEY_SIMPLEX, 0.4, cv::Scalar(255, 255, 255), 1);
         // center dot
         cv::circle(scaledImage, cv::Point(128 * scale, 96 * scale), 1, cv::Scalar(0, 0, 0), 2);
         cv::circle(scaledImage, cv::Point(128 * scale, 96 * scale), 1, cv::Scalar(255, 255, 255), 1);
