@@ -8,6 +8,7 @@
 #include <tuple>
 #include <ctime>
 
+const int thermalPadding = 5; // do not read thermal data N pixels from the edge
 const int font = cv::FONT_HERSHEY_SIMPLEX;
 const cv::Scalar white(255, 255, 255);
 const cv::Scalar red(0, 0, 255);
@@ -69,13 +70,21 @@ std::string getThermalValue(cv::Mat image, int x, int y, bool conv) {
     return oss.str();
 }
 
-std::tuple<int, int>  getValues(cv::Mat img) {
+std::tuple<int, int, int, int>  getValues(cv::Mat img) {
     int16_t highestValue = 0;
+    int16_t lowestValue = 32767; // highest int16_t value
     int highestX;
     int highestY;
-    for (int y = 0; y < img.rows; ++y) {
-        for (int x = 0; x < img.cols; ++x) {
+    int lowestX;
+    int lowestY;
+    for (int y = thermalPadding; y < img.rows - thermalPadding; ++y) {
+        for (int x = thermalPadding; x < img.cols - thermalPadding; ++x) {
             uint16_t pixelValue = img.at<uint16_t>(y, x);
+            if (pixelValue < lowestValue) {
+                lowestValue = pixelValue;
+                lowestX = x;
+                lowestY = y;
+            }
             if (pixelValue > highestValue) {
                 highestValue = pixelValue;
                 highestX = x;
@@ -83,7 +92,7 @@ std::tuple<int, int>  getValues(cv::Mat img) {
             }
         }
     }
-    return std::make_tuple(highestX, highestY);
+    return std::make_tuple(highestX, highestY, lowestX, lowestY);
 }
 
 int main(int argc, char **argv) {
@@ -152,7 +161,15 @@ int main(int argc, char **argv) {
         if (hud) {
             // TODO : get low values
             // Get hi low locations
-            auto [hX, hY] = getValues(thermalMat);
+            auto [hX, hY, lX, lY] = getValues(thermalMat);
+            // lowest temp dot
+            cv::circle(scaledImage, cv::Point(lX * scale, lY * scale), 1, white, 2);
+            cv::circle(scaledImage, cv::Point(lX * scale, lY * scale), 1, blue, 1);
+            // get lowest temp value
+            std::string lowestThermalValue = getThermalValue(thermalMat, lX, lY, tempConv);
+            // lowest value text
+            cv::putText(scaledImage, lowestThermalValue, cv::Point((lX + 2) * scale, (lY + 10) * scale), font, fontScale, black, textBorderWidth);
+            cv::putText(scaledImage, lowestThermalValue, cv::Point((lX + 2) * scale, (lY + 10) * scale), font, fontScale, white, 1);
             // highest temp dot
             cv::circle(scaledImage, cv::Point(hX * scale, hY * scale), 1, black, 2);
             cv::circle(scaledImage, cv::Point(hX * scale, hY * scale), 1, red, 1);
