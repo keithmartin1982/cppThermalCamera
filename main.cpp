@@ -7,27 +7,48 @@
 #include <chrono>
 #include <ctime>
 
-std::string generateTimestampedFilename() {
+std::string timestampFilename(std::string label) {
     auto now = std::chrono::system_clock::now();
     std::time_t now_time = std::chrono::system_clock::to_time_t(now);
     std::tm tm = *std::localtime(&now_time);
     std::ostringstream oss;
-    oss << std::put_time(&tm, "%Y%m%d_%H%M%S") << ".png";
+    oss << std::put_time(&tm, "%Y%m%d_%H%M%S") << label;
+    return oss.str();
+}
+
+std::string getThermalValue(cv::Mat image, int x, int y, bool conv) {
+    cv::Vec2w centerPixel = image.at<cv::Vec2w>(y, x); // a -32 offset of x-axis
+    uint16_t thermValueLow = centerPixel[0];
+    uint16_t thermValueHigh = centerPixel[1];
+    std::string tempFormat;
+    std::ostringstream oss;
+    oss.precision(2);
+    float vTemp;
+    float thermValue = (thermValueLow + thermValueHigh) / 2;
+    float cTemp = thermValue / 64 - 273.15;
+    if (conv) {
+        vTemp = (cTemp * 9 / 5) + 32;
+        oss << std::fixed << vTemp << " F";
+    } else {
+        oss << std::fixed << cTemp << " C";
+    }
     return oss.str();
 }
 
 int main(int argc, char **argv) {
     std::cout << R"(keymap:
+     w  | toggle temp conversion
     z x | scale image + -
      m  | cycle through Colormaps
      p  | save frame to file
-    r t | record / stop (Not Implemented!)
+    r t | record / stop (Not Implemented Yet!)
      q  | quit
      )" << std::endl;
     int mapInt = 0;
     int scale = 2;
     bool tempConv = true;
     bool recording = false;
+    // colormaps
     std::vector<int> colormaps = {
         cv::ColormapTypes::COLORMAP_BONE,
         cv::ColormapTypes::COLORMAP_JET,
@@ -62,48 +83,36 @@ int main(int argc, char **argv) {
     }
     cap.set(cv::CAP_PROP_CONVERT_RGB, false);
     cv::Mat frame(cv::Size(256, 384), CV_16UC2);
+
     while (true) {
         cap >> frame;
         if (frame.empty()) {
             std::cerr << "Error: Could not grab a frame." << std::endl;
             break;
         }
-        cv::Rect topHalf(0, 0, frame.cols, frame.rows / 2);
+        // set top visible rect
+        cv::Rect topHalf(0, 0, 256, 192);
         cv::Mat visibleMat = frame(topHalf);
-        cv::Rect bottomHalf(0, frame.rows / 2 , frame.cols, frame.rows / 2);
-        cv::Mat thermalMat(cv::Size(256, 192), CV_16UC2);
-        thermalMat = frame(bottomHalf);
-        int offset = 32;
-        cv::Vec2w centerPixel = thermalMat.at<cv::Vec2w>(128-offset, 96-offset);
-        uint16_t thermValueLow = centerPixel[0];
-        uint16_t thermValueHigh = centerPixel[1];
-        std::string tempFormat;
-        float vTemp;
-        float thermValue = (thermValueLow + thermValueHigh) / 2;
-        float cTemp = thermValue / 64 - 273.15;
-        if (tempConv) {
-            tempFormat = " F";
-            vTemp = (cTemp * 9 / 5) + 32;
-        } else {
-            tempFormat = " C";
-            vTemp = cTemp;
-        }
+        // convert to rgb
         cv::Mat matRGB;
         cv::cvtColor(visibleMat, matRGB, cv::COLOR_YUV2BGR_YUYV);
+        // apply colormap
         cv::Mat colormapped;
         cv::applyColorMap(matRGB, colormapped, colormaps[mapInt]);
+        // scale mat
         cv::Mat scaledImage;
-        cv::resize(colormapped, scaledImage, cv::Size(256 * scale, 192 * scale), 0, 0, cv::INTER_NEAREST);
-        std::ostringstream oss;
-        oss.precision(2);
-        oss << std::fixed << vTemp;
-        std::string tempText = oss.str() + tempFormat;
-        cv::putText(scaledImage, tempText, cv::Point(5, 10), cv::FONT_HERSHEY_SIMPLEX, 0.4, cv::Scalar(0, 0, 0), 2);
-        cv::putText(scaledImage, tempText, cv::Point(5, 10), cv::FONT_HERSHEY_SIMPLEX, 0.4, cv::Scalar(255, 255, 255), 1);
+        cv::resize(colormapped, scaledImage, cv::Size(256 * scale, 192 * scale), 0, 0, cv::INTER_CUBIC);
+        // get center thermal value
+        std::string centerThermalValue = getThermalValue(frame, 64, 288, tempConv);
+        // display thermal value
+        cv::putText(scaledImage, centerThermalValue, cv::Point(5, 10), cv::FONT_HERSHEY_SIMPLEX, 0.4, cv::Scalar(0, 0, 0), 2);
+        cv::putText(scaledImage, centerThermalValue, cv::Point(5, 10), cv::FONT_HERSHEY_SIMPLEX, 0.4, cv::Scalar(255, 255, 255), 1);
+        // center dot
         cv::circle(scaledImage, cv::Point(128 * scale, 96 * scale), 1, cv::Scalar(0, 0, 0), 2);
         cv::circle(scaledImage, cv::Point(128 * scale, 96 * scale), 1, cv::Scalar(255, 255, 255), 1);
+        // show frame
         cv::imshow("Webcam", scaledImage);
-        switch (cv::waitKey(30)) {
+        switch (cv::waitKey(10)) {
             case 'q':
                 return 0;
                 break;
@@ -123,7 +132,7 @@ int main(int argc, char **argv) {
                 }
                 break;
             case 'p':
-                if (!cv::imwrite(generateTimestampedFilename(), scaledImage)) {
+                if (!cv::imwrite(timestampFilename(".png"), scaledImage)) {
                         std::cerr << "Could not save image!" << std::endl;
                         return -1;
                     }
@@ -137,11 +146,11 @@ int main(int argc, char **argv) {
                 break;
             case 'r':
                 recording = true;
-                std::cerr << "Not Implemented!" << std::endl;
+                std::cerr << "Not Implemented Yet!" << std::endl;
                 break;
             case 't':
                 recording = false;
-                std::cerr << "Not Implemented!" << std::endl;
+                std::cerr << "Not Implemented Yet!" << std::endl;
                 break;
         }
     }
