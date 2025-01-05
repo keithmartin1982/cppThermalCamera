@@ -8,6 +8,39 @@
 #include <tuple>
 #include <ctime>
 
+const int font = cv::FONT_HERSHEY_SIMPLEX;
+const cv::Scalar white(255, 255, 255);
+const cv::Scalar red(0, 0, 255);
+const cv::Scalar green(0, 255, 0);
+const cv::Scalar blue(255, 0, 0);
+const cv::Scalar black(0, 0, 0);
+const float fontScale = 0.4;
+const int textBorderWidth = 3;
+const std::vector<int> colormaps = {
+    cv::ColormapTypes::COLORMAP_BONE,
+    cv::ColormapTypes::COLORMAP_JET,
+    cv::ColormapTypes::COLORMAP_DEEPGREEN,
+    cv::ColormapTypes::COLORMAP_VIRIDIS,
+    cv::ColormapTypes::COLORMAP_CIVIDIS,
+    cv::ColormapTypes::COLORMAP_TURBO,
+    cv::ColormapTypes::COLORMAP_TWILIGHT_SHIFTED,
+    cv::ColormapTypes::COLORMAP_OCEAN,
+    cv::ColormapTypes::COLORMAP_PINK,
+    cv::ColormapTypes::COLORMAP_HOT,
+    cv::ColormapTypes::COLORMAP_MAGMA,
+    cv::ColormapTypes::COLORMAP_INFERNO,
+    //cv::ColormapTypes::COLORMAP_HSV,
+    //cv::ColormapTypes::COLORMAP_AUTUMN,
+    //cv::ColormapTypes::COLORMAP_WINTER,
+    //cv::ColormapTypes::COLORMAP_RAINBOW,
+    //cv::ColormapTypes::COLORMAP_SUMMER,
+    //cv::ColormapTypes::COLORMAP_SPRING,
+    //cv::ColormapTypes::COLORMAP_COOL,
+    //cv::ColormapTypes::COLORMAP_PARULA,
+    //cv::ColormapTypes::COLORMAP_PLASMA,
+    //cv::ColormapTypes::COLORMAP_TWILIGHT,
+};
+
 std::string timestampFilename(std::string label) {
     auto now = std::chrono::system_clock::now();
     std::time_t now_time = std::chrono::system_clock::to_time_t(now);
@@ -55,6 +88,7 @@ std::tuple<int, int>  getValues(cv::Mat img) {
 
 int main(int argc, char **argv) {
     std::cout << R"(keymap:
+     c  | toggle crosshair
      w  | toggle temp conversion
      h  | toggle hud
     z x | scale image + -
@@ -68,35 +102,11 @@ int main(int argc, char **argv) {
     int scale = 2;
     bool tempConv = true;
     bool recording = false;
-    bool hud = true; // TODO : set to false
-    // colormaps
-    std::vector<int> colormaps = {
-        cv::ColormapTypes::COLORMAP_BONE,
-        cv::ColormapTypes::COLORMAP_JET,
-        cv::ColormapTypes::COLORMAP_DEEPGREEN,
-        cv::ColormapTypes::COLORMAP_VIRIDIS,
-        cv::ColormapTypes::COLORMAP_CIVIDIS,
-        cv::ColormapTypes::COLORMAP_TURBO,
-        cv::ColormapTypes::COLORMAP_TWILIGHT_SHIFTED,
-        cv::ColormapTypes::COLORMAP_OCEAN,
-        cv::ColormapTypes::COLORMAP_PINK,
-        cv::ColormapTypes::COLORMAP_HOT,
-        cv::ColormapTypes::COLORMAP_MAGMA,
-        cv::ColormapTypes::COLORMAP_INFERNO,
-        //cv::ColormapTypes::COLORMAP_HSV,
-        //cv::ColormapTypes::COLORMAP_AUTUMN,
-        //cv::ColormapTypes::COLORMAP_WINTER,
-        //cv::ColormapTypes::COLORMAP_RAINBOW,
-        //cv::ColormapTypes::COLORMAP_SUMMER,
-        //cv::ColormapTypes::COLORMAP_SPRING,
-        //cv::ColormapTypes::COLORMAP_COOL,
-        //cv::ColormapTypes::COLORMAP_PARULA,
-        //cv::ColormapTypes::COLORMAP_PLASMA,
-        //cv::ColormapTypes::COLORMAP_TWILIGHT,
-    };
+    bool crosshair = true;
+    bool hud = true;
     int colormapsLen = static_cast<int>(colormaps.size());
     int deviceInt{std::stoi(argv[1])};
-    std::cout << "Opening device: " << deviceInt << std::endl;
+    //std::cout << "Opening device: " << deviceInt << std::endl;
     cv::VideoCapture cap(deviceInt);
     if (!cap.isOpened()) {
         std::cerr << "Error: Could not open the webcam." << std::endl;
@@ -104,7 +114,7 @@ int main(int argc, char **argv) {
     }
     cap.set(cv::CAP_PROP_CONVERT_RGB, false);
     cv::Mat frame(cv::Size(256, 384), CV_16UC2);
-
+    // start video capture
     while (true) {
         cap >> frame;
         if (frame.empty()) {
@@ -126,27 +136,32 @@ int main(int argc, char **argv) {
         // scale mat
         cv::Mat scaledImage;
         cv::resize(colormapped, scaledImage, cv::Size(256 * scale, 192 * scale), 0, 0, cv::INTER_CUBIC);
-        // get center thermal value
-        std::string centerThermalValue = getThermalValue(thermalMat, 128, 96, tempConv);
-        // display thermal value
-        cv::putText(scaledImage, centerThermalValue, cv::Point((256* scale)-60,(192 * scale)-4), cv::FONT_HERSHEY_SIMPLEX, 0.4, cv::Scalar(0, 0, 0), 2);
-        cv::putText(scaledImage, centerThermalValue, cv::Point((256* scale)-60,(192 * scale)-4), cv::FONT_HERSHEY_SIMPLEX, 0.4, cv::Scalar(255, 255, 255), 1);
+        if (crosshair) {
+            // line H
+            //cv::line(scaledImage, cv::Point((128 * scale)-10, 96 * scale), cv::Point((128 * scale)+10, 96 * scale), cv::Scalar(0, 0, 0), 2);
+            cv::line(scaledImage, cv::Point((128 * scale)-10, 96 * scale), cv::Point((128 * scale)+10, 96 * scale), red, 1);
+            // line V
+            //cv::line(scaledImage, cv::Point(128 * scale, (96 * scale) - 10), cv::Point(128 * scale, (96 * scale)+10), white, 2);
+            cv::line(scaledImage, cv::Point(128 * scale, (96 * scale) - 10), cv::Point(128 * scale, (96 * scale)+10), red, 1);
+            // get center thermal value
+            std::string centerThermalValue = getThermalValue(thermalMat, 128, 96, tempConv);
+            // display thermal value
+            cv::putText(scaledImage, centerThermalValue, cv::Point((256* scale)-65,(192 * scale)-4), font, fontScale, black, textBorderWidth);
+            cv::putText(scaledImage, centerThermalValue, cv::Point((256* scale)-65,(192 * scale)-4), font, fontScale, white, 1);
+        }
         if (hud) {
             // TODO : get low values
             // Get hi low locations
             auto [hX, hY] = getValues(thermalMat);
             // highest temp dot
-            cv::circle(scaledImage, cv::Point(hX * scale, hY * scale), 1, cv::Scalar(0, 0, 0), 2);
-            cv::circle(scaledImage, cv::Point(hX * scale, hY * scale), 1, cv::Scalar(0, 0, 255), 1);
+            cv::circle(scaledImage, cv::Point(hX * scale, hY * scale), 1, black, 2);
+            cv::circle(scaledImage, cv::Point(hX * scale, hY * scale), 1, red, 1);
             // get temp at highest point
             std::string highestThermalValue = getThermalValue(thermalMat, hX, hY, tempConv);
             // highest temp text
-            cv::putText(scaledImage, highestThermalValue, cv::Point((hX + 2) * scale, (hY + 10) * scale), cv::FONT_HERSHEY_SIMPLEX, 0.4, cv::Scalar(0, 0, 0), 2);
-            cv::putText(scaledImage, highestThermalValue, cv::Point((hX + 2) * scale, (hY + 10) * scale), cv::FONT_HERSHEY_SIMPLEX, 0.4, cv::Scalar(255, 255, 255), 1);
+            cv::putText(scaledImage, highestThermalValue, cv::Point((hX + 2) * scale, (hY + 10) * scale), font, fontScale, black, textBorderWidth);
+            cv::putText(scaledImage, highestThermalValue, cv::Point((hX + 2) * scale, (hY + 10) * scale), font, fontScale, white, 1);
         }
-        // center dot // TODO :  crosshair
-        cv::circle(scaledImage, cv::Point(128 * scale, 96 * scale), 1, cv::Scalar(0, 0, 0), 2);
-        cv::circle(scaledImage, cv::Point(128 * scale, 96 * scale), 1, cv::Scalar(255, 255, 255), 1);
         // Write frame to videoWriter if recording
         if (recording) {
             videoWriter.write(scaledImage);
@@ -200,7 +215,6 @@ int main(int argc, char **argv) {
                 videoWriter.release();
                 std::cout << "Recording stopped..." << std::endl;
                 recording = false;
-
                 break;
             case 'h':
                 if (hud) {
@@ -208,6 +222,14 @@ int main(int argc, char **argv) {
                 } else {
                     hud = true;
                 }
+                break;
+            case 'c':
+                if (crosshair) {
+                    crosshair = false;
+                } else {
+                    crosshair = true;
+                }
+                break;
         }
     }
     cap.release();
