@@ -18,9 +18,9 @@ std::string timestampFilename(std::string label) {
 }
 
 std::string getThermalValue(cv::Mat image, int x, int y, bool conv) {
-    uint16_t* centerPixel = image.ptr<uint16_t>(y, x); // a -32 offset of x-axis
-    uint16_t thermValueLow = centerPixel[0];
-    uint16_t thermValueHigh = centerPixel[1];
+    uint16_t* targetPixel = image.ptr<uint16_t>(y, x);
+    uint16_t thermValueLow = targetPixel[0];
+    uint16_t thermValueHigh = targetPixel[1];
     std::string tempFormat;
     std::ostringstream oss;
     oss.precision(2);
@@ -56,17 +56,19 @@ std::tuple<int, int>  getValues(cv::Mat img) {
 int main(int argc, char **argv) {
     std::cout << R"(keymap:
      w  | toggle temp conversion
+     h  | toggle hud
     z x | scale image + -
      m  | cycle through Colormaps
      p  | save frame to file
     r t | record / stop (Not Implemented Yet!)
      q  | quit
      )" << std::endl;
-    int offset = 32;
+    cv::VideoWriter videoWriter;
     int mapInt = 0;
     int scale = 2;
     bool tempConv = true;
     bool recording = false;
+    bool hud = true; // TODO : set to false
     // colormaps
     std::vector<int> colormaps = {
         cv::ColormapTypes::COLORMAP_BONE,
@@ -112,10 +114,7 @@ int main(int argc, char **argv) {
         // get thermal mat
         cv::Rect bottomHalf(0, frame.rows / 2 , frame.cols, frame.rows / 2);
         cv::Mat thermalMat = frame(bottomHalf);
-        // TODO : get low values
-        // Get hi low locations
-        auto [hX, hY] = getValues(thermalMat);
-        // set top visible rect
+        // get visible mat
         cv::Rect topHalf(0, 0, 256, 192);
         cv::Mat visibleMat = frame(topHalf);
         // convert to rgb
@@ -130,19 +129,28 @@ int main(int argc, char **argv) {
         // get center thermal value
         std::string centerThermalValue = getThermalValue(thermalMat, 128, 96, tempConv);
         // display thermal value
-        cv::putText(scaledImage, centerThermalValue, cv::Point(5, 10), cv::FONT_HERSHEY_SIMPLEX, 0.4, cv::Scalar(0, 0, 0), 2);
-        cv::putText(scaledImage, centerThermalValue, cv::Point(5, 10), cv::FONT_HERSHEY_SIMPLEX, 0.4, cv::Scalar(255, 255, 255), 1);
-        // highest temp dot
-        cv::circle(scaledImage, cv::Point(hX * scale, hY * scale), 1, cv::Scalar(0, 0, 0), 2);
-        cv::circle(scaledImage, cv::Point(hX * scale, hY * scale), 1, cv::Scalar(255, 255, 255), 1);
-        // get temp at highest point
-        std::string highestThermalValue = getThermalValue(thermalMat, hX, hY, tempConv);
-        // highest text
-        cv::putText(scaledImage, highestThermalValue, cv::Point((hX + 2) * scale, (hY + 10) * scale), cv::FONT_HERSHEY_SIMPLEX, 0.4, cv::Scalar(0, 0, 0), 2);
-        cv::putText(scaledImage, highestThermalValue, cv::Point((hX + 2) * scale, (hY + 10) * scale), cv::FONT_HERSHEY_SIMPLEX, 0.4, cv::Scalar(255, 255, 255), 1);
-        // center dot
+        cv::putText(scaledImage, centerThermalValue, cv::Point((256* scale)-60,(192 * scale)-4), cv::FONT_HERSHEY_SIMPLEX, 0.4, cv::Scalar(0, 0, 0), 2);
+        cv::putText(scaledImage, centerThermalValue, cv::Point((256* scale)-60,(192 * scale)-4), cv::FONT_HERSHEY_SIMPLEX, 0.4, cv::Scalar(255, 255, 255), 1);
+        if (hud) {
+            // TODO : get low values
+            // Get hi low locations
+            auto [hX, hY] = getValues(thermalMat);
+            // highest temp dot
+            cv::circle(scaledImage, cv::Point(hX * scale, hY * scale), 1, cv::Scalar(0, 0, 0), 2);
+            cv::circle(scaledImage, cv::Point(hX * scale, hY * scale), 1, cv::Scalar(0, 0, 255), 1);
+            // get temp at highest point
+            std::string highestThermalValue = getThermalValue(thermalMat, hX, hY, tempConv);
+            // highest temp text
+            cv::putText(scaledImage, highestThermalValue, cv::Point((hX + 2) * scale, (hY + 10) * scale), cv::FONT_HERSHEY_SIMPLEX, 0.4, cv::Scalar(0, 0, 0), 2);
+            cv::putText(scaledImage, highestThermalValue, cv::Point((hX + 2) * scale, (hY + 10) * scale), cv::FONT_HERSHEY_SIMPLEX, 0.4, cv::Scalar(255, 255, 255), 1);
+        }
+        // center dot // TODO :  crosshair
         cv::circle(scaledImage, cv::Point(128 * scale, 96 * scale), 1, cv::Scalar(0, 0, 0), 2);
         cv::circle(scaledImage, cv::Point(128 * scale, 96 * scale), 1, cv::Scalar(255, 255, 255), 1);
+        // Write frame to videoWriter if recording
+        if (recording) {
+            videoWriter.write(scaledImage);
+        }
         // show frame
         cv::imshow("Webcam", scaledImage);
         switch (cv::waitKey(10)) {
@@ -157,10 +165,12 @@ int main(int argc, char **argv) {
                 }
                 break;
             case 'z':
-                scale++;
+                if (!recording) {
+                    scale++;
+                }
                 break;
             case 'x':
-                if (scale > 1) {
+                if (scale > 1 && !recording) {
                     scale--;
                 }
                 break;
@@ -178,13 +188,26 @@ int main(int argc, char **argv) {
                 }
                 break;
             case 'r':
+                videoWriter.open(timestampFilename(".avi"), cv::VideoWriter::fourcc('M', 'J', 'P', 'G'), 25, cv::Size(256*scale, 192*scale));
+                if (!videoWriter.isOpened()) {
+                    std::cerr << "Could not open the output video file for write\n";
+                    break;
+                }
+                std::cout << "Recording started..." << std::endl;
                 recording = true;
-                std::cerr << "Not Implemented Yet!" << std::endl;
                 break;
             case 't':
+                videoWriter.release();
+                std::cout << "Recording stopped..." << std::endl;
                 recording = false;
-                std::cerr << "Not Implemented Yet!" << std::endl;
+
                 break;
+            case 'h':
+                if (hud) {
+                    hud = false;
+                } else {
+                    hud = true;
+                }
         }
     }
     cap.release();
