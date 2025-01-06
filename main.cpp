@@ -103,7 +103,7 @@ int main(int argc, char **argv) {
     z x | scale image + -
      m  | cycle through Colormaps
      p  | save frame to file
-    r t | record / stop (Not Implemented Yet!)
+    r t | record / stop
      q  | quit
      )" << std::endl;
     cv::VideoWriter videoWriter;
@@ -159,12 +159,11 @@ int main(int argc, char **argv) {
             cv::putText(scaledImage, centerThermalValue, cv::Point((256* scale)-65,(192 * scale)-4), font, fontScale, white, 1);
         }
         if (hud) {
-            // TODO : get low values
             // Get hi low locations
             auto [hX, hY, lX, lY] = getValues(thermalMat);
             // lowest temp dot
-            cv::circle(scaledImage, cv::Point(lX * scale, lY * scale), 1, white, 2);
-            cv::circle(scaledImage, cv::Point(lX * scale, lY * scale), 1, blue, 1);
+            cv::circle(scaledImage, cv::Point(lX * scale, lY * scale), 1, blue, 2);
+            cv::circle(scaledImage, cv::Point(lX * scale, lY * scale), 1, white, 1);
             // get lowest temp value
             std::string lowestThermalValue = getThermalValue(thermalMat, lX, lY, tempConv);
             // lowest value text
