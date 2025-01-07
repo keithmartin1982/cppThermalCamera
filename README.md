@@ -2,22 +2,23 @@
 
 read the thermal data from a topdon TC001 thermal camera
 
-![output](.git-assets/capture-0.png)
+![output](.git-assets/capture-1.png)
 
 
 # Controls
 
 ```shell
 keymap:
+     i  | toggle information
      c  | toggle crosshair
      w  | toggle temp conversion
-     h  | toggle hud
-    z x | scale image + -
+     h  | toggle High/Low points
+    z x | scale image - +
+    b n | thermalSearchArea - +
      m  | cycle through Colormaps
      p  | save frame to file
     r t | record / stop
      q  | quit
-
 ```
 
 # Resources

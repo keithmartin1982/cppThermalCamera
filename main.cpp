@@ -8,7 +8,7 @@
 #include <tuple>
 #include <ctime>
 
-int thermalPadding = 10; // do not read thermal data N pixels from the edge, higher value lowers processing time
+int thermalPadding = 20; // do not read thermal data N pixels from the edge, higher value lowers processing time
 const int font = cv::FONT_HERSHEY_SIMPLEX;
 const cv::Scalar white(255, 255, 255);
 const cv::Scalar red(0, 0, 255);
@@ -20,16 +20,16 @@ const int textBorderWidth = 3;
 const std::vector<std::tuple<int, std::string>> colormaps = {
     {cv::ColormapTypes::COLORMAP_BONE, "Bone"},
     {cv::ColormapTypes::COLORMAP_JET, "Jet"},
-    {cv::ColormapTypes::COLORMAP_DEEPGREEN, "DeepGreen"},
-    {cv::ColormapTypes::COLORMAP_VIRIDIS, "Viridis"},
-    {cv::ColormapTypes::COLORMAP_CIVIDIS, "Cividis"},
     {cv::ColormapTypes::COLORMAP_TURBO, "Turbo"},
-    {cv::ColormapTypes::COLORMAP_TWILIGHT_SHIFTED, "TwilightShifted"},
+    {cv::ColormapTypes::COLORMAP_DEEPGREEN, "DeepGreen"},
     {cv::ColormapTypes::COLORMAP_OCEAN, "Ocean"},
-    {cv::ColormapTypes::COLORMAP_PINK, "Pink"},
     {cv::ColormapTypes::COLORMAP_HOT, "Hot"},
     {cv::ColormapTypes::COLORMAP_MAGMA, "Magma"},
     {cv::ColormapTypes::COLORMAP_INFERNO, "Inferno"},
+    {cv::ColormapTypes::COLORMAP_PINK, "Pink"},
+    {cv::ColormapTypes::COLORMAP_VIRIDIS, "Viridis"},
+    {cv::ColormapTypes::COLORMAP_CIVIDIS, "Cividis"},
+    {cv::ColormapTypes::COLORMAP_TWILIGHT_SHIFTED, "TwilightShifted"},
     //{cv::ColormapTypes::COLORMAP_HSV, "HSV"},
     //{cv::ColormapTypes::COLORMAP_AUTUMN, "Autumn"},
     //{cv::ColormapTypes::COLORMAP_WINTER, "Winter"},
@@ -100,7 +100,7 @@ int main(int argc, char **argv) {
      i  | toggle information
      c  | toggle crosshair
      w  | toggle temp conversion
-     h  | toggle hud
+     h  | toggle High/Low points
     z x | scale image - +
     b n | thermalSearchArea - +
      m  | cycle through Colormaps
@@ -115,13 +115,12 @@ int main(int argc, char **argv) {
     bool recording = false;
     bool crosshair = true;
     bool info = false;
-    bool hud = true;
+    bool highLow = false;
     int colormapsLen = static_cast<int>(colormaps.size());
     int deviceInt{std::stoi(argv[1])};
-    //std::cout << "Opening device: " << deviceInt << std::endl;
     cv::VideoCapture cap(deviceInt);
     if (!cap.isOpened()) {
-        std::cerr << "Error: Could not open the webcam." << std::endl;
+        std::cerr << "Error: Could not open the Thermal camera." << std::endl;
         return -1;
     }
     cap.set(cv::CAP_PROP_CONVERT_RGB, false);
@@ -134,10 +133,6 @@ int main(int argc, char **argv) {
             std::cerr << "Error: Could not grab a frame." << std::endl;
             break;
         }
-        // get current colormap
-        auto [colormapInt, colormapText] = colormaps[mapInt];
-        // start logic timer
-        //auto start = std::chrono::high_resolution_clock::now();
         // get thermal mat
         cv::Rect bottomHalf(0, frame.rows / 2 , frame.cols, frame.rows / 2);
         cv::Mat thermalMat = frame(bottomHalf);
@@ -147,6 +142,8 @@ int main(int argc, char **argv) {
         // convert to rgb
         cv::Mat matRGB;
         cv::cvtColor(visibleMat, matRGB, cv::COLOR_YUV2BGR_YUYV);
+        // get current colormap
+        auto [colormapInt, colormapText] = colormaps[mapInt];
         // apply colormap
         cv::Mat colormapped;
         cv::applyColorMap(matRGB, colormapped, colormapInt);
@@ -163,7 +160,7 @@ int main(int argc, char **argv) {
             cv::putText(scaledImage, centerThermalValue, cv::Point((256* scale)-65,(192 * scale)-4), font, fontScale, black, textBorderWidth);
             cv::putText(scaledImage, centerThermalValue, cv::Point((256* scale)-65,(192 * scale)-4), font, fontScale, white, 1);
         }
-        if (hud) {
+        if (highLow) {
             // Get hi low locations
             auto [hX, hY, lX, lY] = getValues(thermalMat);
             // lowest temp dot
@@ -196,10 +193,6 @@ int main(int argc, char **argv) {
         }
         // show frame
         cv::imshow("Webcam", scaledImage);
-        // print logic timer, uncomment next 3 lines
-        //auto end = std::chrono::high_resolution_clock::now();
-        //auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-        //std::cout << "processing time: " << duration.count() << " microseconds" << std::endl;
         // handle key presses
         switch (cv::waitKey(10)) {
             case 'q':
@@ -246,7 +239,7 @@ int main(int argc, char **argv) {
                 recording = false;
                 break;
             case 'h':
-                hud = !hud;
+                highLow = !highLow;
                 break;
             case 'c':
                 crosshair = !crosshair;
