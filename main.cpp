@@ -66,8 +66,21 @@ std::string timestampFilename(const std::string& label) {
     return oss.str();
 }
 
-std::string getThermalValue(cv::Mat image, int x, int y, bool conv) {
-    const uint16_t* targetPixel = image.ptr<uint16_t>(y, x);
+void printFrameInfo(cv::Mat frame) {
+    std::cout << "Rows: " << frame.rows << std::endl;
+    std::cout << "Cols: " << frame.cols << std::endl;
+    std::cout << "Channels: " << frame.channels() << std::endl;
+    std::cout << "Depth: " << frame.depth() << std::endl;
+    std::cout << "Type: " << frame.type() << std::endl;
+    std::cout << "Element Size: " << frame.elemSize() << " bytes" << std::endl;
+    std::cout << "Element Size (Channel): " << frame.elemSize1() << " bytes" << std::endl;
+    std::cout << "Total Elements: " << frame.total() << std::endl;
+    std::cout << "Is Empty: " << frame.empty() << std::endl;
+    exit(0);
+}
+
+std::string getThermalValue(cv::Mat frame, int x, int y, bool conv) {
+    const uint16_t* targetPixel = frame.ptr<uint16_t>(y, x);
     const uint16_t thermValueLow = targetPixel[0];
     const uint16_t thermValueHigh = targetPixel[1];
     std::string tempFormat;
@@ -140,17 +153,22 @@ int main(int argc, char* argv[]) {
     bool info = false;
     bool highLow = false;
     int colormapsLen = static_cast<int>(colormaps.size());
-    cv::VideoCapture cap(deviceInt);
+    // set video source gstreamer to raw, this is the right way to get raw data from thermal camera on linux
+    char pipeline[256]; // Ensure buffer is large enough
+    sprintf(pipeline, "v4l2src device=/dev/video%d ! video/x-raw, width=256, height=384, format=YUY2 ! appsink drop=1", deviceInt);
+    cv::VideoCapture cap(pipeline, cv::CAP_GSTREAMER);
     if (!cap.isOpened()) {
         std::cerr << "Error: Could not open the Thermal camera." << std::endl;
         return -1;
     }
-    cap.set(cv::CAP_PROP_CONVERT_RGB, false);
-    cv::Mat frame(cv::Size(256, 384), CV_16UC2);
+    cv::Mat frame;
     // start video capture
     while (true) {
+        // fps counter part0
+        //int64 start = cv::getTickCount();
         // get frame
         cap >> frame;
+        //printFrameInfo(frame); // testing
         if (frame.empty()) {
             std::cerr << "Error: Could not grab a frame." << std::endl;
             break;
@@ -161,17 +179,20 @@ int main(int argc, char* argv[]) {
         // get visible mat
         cv::Rect topHalf(0, 0, 256, 192);
         cv::Mat visibleMat = frame(topHalf);
-        // convert to rgb
-        cv::Mat matRGB;
-        cvtColor(visibleMat, matRGB, cv::COLOR_YUV2BGR_YUYV);
+        //printFrameInfo(visibleMat);  // testing
+        // Extract the first channel
+        cv::Mat singleChannelMat;
+        extractChannel(visibleMat, singleChannelMat, 0);
+        // convert 1 channel gray mat to RGB
+        cv::Mat rgbFrame;
+        cvtColor(singleChannelMat, rgbFrame, cv::COLOR_GRAY2BGR);
         // get current colormap
         auto [colormapInt, colormapText] = colormaps[mapInt];
         // apply colormap
-        cv::Mat colormapped;
-        applyColorMap(matRGB, colormapped, colormapInt);
+        applyColorMap(singleChannelMat, singleChannelMat, colormapInt);
         // scale mat
         cv::Mat scaledImage;
-        resize(colormapped, scaledImage, cv::Size(256 * scale, 192 * scale), 0, 0, cv::INTER_CUBIC);
+        resize(singleChannelMat, scaledImage, cv::Size(256 * scale, 192 * scale), 0, 0, cv::INTER_CUBIC);
         if (crosshair) {
             // draw crosshair
             line(scaledImage, cv::Point((128 * scale) - 10, 96 * scale), cv::Point((128 * scale)+10, 96 * scale), red, 1);
@@ -222,9 +243,9 @@ int main(int argc, char* argv[]) {
             videoWriter.write(scaledImage);
         }
         // show frame
-        imshow("Webcam", scaledImage);
+        imshow("CppThermalCamera", scaledImage);
         // handle key presses
-        switch (cv::waitKey(10)) {
+        switch (cv::waitKey(37)) {
             case 'q':
                 return 0;
             case 'm':
@@ -289,6 +310,9 @@ int main(int argc, char* argv[]) {
                 break;
             default: break;
         }
+        // fps counter part1
+        //double fps = cv::getTickFrequency() / (cv::getTickCount() - start);
+        //std::cout << "\rFPS : " << fps;
     }
     cap.release();
     cv::destroyAllWindows();
