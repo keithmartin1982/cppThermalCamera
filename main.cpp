@@ -122,6 +122,7 @@ std::tuple<int, int, int, int> getValues(cv::Mat img) {
     return std::make_tuple(highestX, highestY, lowestX, lowestY);
 }
 
+
 int main(int argc, char* argv[]) {
     if (argc < 2) {
         std::cerr << "Usage: " << argv[0] << " -d <deviceInt>" << std::endl;
@@ -136,7 +137,8 @@ int main(int argc, char* argv[]) {
      i  | toggle information (display [thermal area outline, colormap name])
      c  | toggle crosshair
      w  | toggle temp conversion
-     h  | toggle High/Low points
+    h l | toggle High/Low points
+     k  | toggle High/Low points temp labels
     z x | scale frame - +
     b n | thermal area - +
      m  | cycle through Colormaps
@@ -144,6 +146,8 @@ int main(int argc, char* argv[]) {
     r t | record / stop
      q  | quit)" << std::endl;
     cv::VideoWriter videoWriter;
+    char windowName[24];
+    sprintf(windowName, "%s v%d.%d.%d", "cppThermalCamera", PROJECT_VERSION_MAJOR, PROJECT_VERSION_MINOR, PROJECT_VERSION_PATCH);
     auto recordingStartTime = std::chrono::system_clock::now();
     int mapInt = 0;
     int scale = 2;
@@ -151,10 +155,12 @@ int main(int argc, char* argv[]) {
     bool recording = false;
     bool crosshair = true;
     bool info = false;
-    bool highLow = false;
+    bool lowPoint = false;
+    bool highPoint = true;
+    bool highLowLabel = false;
     int colormapsLen = static_cast<int>(colormaps.size());
-    // set video source gstreamer to raw, this is the right way to get raw data from thermal camera on linux
-    char pipeline[256]; // Ensure buffer is large enough
+    // set video source gstreamer to raw
+    char pipeline[128];
     sprintf(pipeline, "v4l2src device=/dev/video%d ! video/x-raw, width=256, height=384, format=YUY2 ! appsink drop=1", deviceInt);
     cv::VideoCapture cap(pipeline, cv::CAP_GSTREAMER);
     if (!cap.isOpened()) {
@@ -182,54 +188,61 @@ int main(int argc, char* argv[]) {
         //printFrameInfo(visibleMat);  // testing
         // Extract the first channel
         cv::Mat singleChannelMat;
-        extractChannel(visibleMat, singleChannelMat, 0);
+        cv::extractChannel(visibleMat, singleChannelMat, 0);
         // convert 1 channel gray mat to RGB
         cv::Mat rgbFrame;
-        cvtColor(singleChannelMat, rgbFrame, cv::COLOR_GRAY2BGR);
+        cv::cvtColor(singleChannelMat, rgbFrame, cv::COLOR_GRAY2BGR);
         // get current colormap
         auto [colormapInt, colormapText] = colormaps[mapInt];
         // apply colormap
-        applyColorMap(singleChannelMat, singleChannelMat, colormapInt);
+        cv::applyColorMap(singleChannelMat, singleChannelMat, colormapInt);
         // scale mat
         cv::Mat scaledImage;
-        resize(singleChannelMat, scaledImage, cv::Size(256 * scale, 192 * scale), 0, 0, cv::INTER_CUBIC);
+        cv::resize(singleChannelMat, scaledImage, cv::Size(256 * scale, 192 * scale), 0, 0, cv::INTER_CUBIC);
         if (crosshair) {
             // draw crosshair
-            line(scaledImage, cv::Point((128 * scale) - 10, 96 * scale), cv::Point((128 * scale)+10, 96 * scale), red, 1);
-            line(scaledImage, cv::Point(128 * scale, (96 * scale) - 10), cv::Point(128 * scale, (96 * scale)+10), red, 1);
+            cv::line(scaledImage, cv::Point((128 * scale) - 10, 96 * scale), cv::Point((128 * scale)+10, 96 * scale), red, 1);
+            cv::line(scaledImage, cv::Point(128 * scale, (96 * scale) - 10), cv::Point(128 * scale, (96 * scale)+10), red, 1);
             // get center thermal value
             std::string centerThermalValue = getThermalValue(thermalMat, 128, 96, tempConv);
             // display thermal value
-            putText(scaledImage, centerThermalValue, cv::Point((256* scale)-65,(192 * scale)-4), font, fontScale, black, textBorderWidth);
-            putText(scaledImage, centerThermalValue, cv::Point((256* scale)-65,(192 * scale)-4), font, fontScale, white, 1);
+            cv::putText(scaledImage, centerThermalValue, cv::Point((256* scale)-65,(192 * scale)-4), font, fontScale, black, textBorderWidth);
+            cv::putText(scaledImage, centerThermalValue, cv::Point((256* scale)-65,(192 * scale)-4), font, fontScale, white, 1);
         }
-        if (highLow) {
-            // Get hi low locations
+        if (highPoint || lowPoint) {
             auto [hX, hY, lX, lY] = getValues(thermalMat);
-            // lowest temp dot
-            circle(scaledImage, cv::Point(lX * scale, lY * scale), 1, blue, 2);
-            circle(scaledImage, cv::Point(lX * scale, lY * scale), 1, white, 1);
-            // get lowest temp value
-            std::string lowestThermalValue = getThermalValue(thermalMat, lX, lY, tempConv);
-            // lowest value text
-            putText(scaledImage, lowestThermalValue, cv::Point((lX + 2) * scale, (lY + 7) * scale), font, fontScale, black, textBorderWidth);
-            putText(scaledImage, lowestThermalValue, cv::Point((lX + 2) * scale, (lY + 7) * scale), font, fontScale, white, 1);
-            // highest temp dot
-            circle(scaledImage, cv::Point(hX * scale, hY * scale), 1, black, 2);
-            circle(scaledImage, cv::Point(hX * scale, hY * scale), 1, red, 1);
-            // get temp at highest point
-            std::string highestThermalValue = getThermalValue(thermalMat, hX, hY, tempConv);
-            // highest temp text
-            putText(scaledImage, highestThermalValue, cv::Point((hX + 2) * scale, (hY + 7) * scale), font, fontScale, black, textBorderWidth);
-            putText(scaledImage, highestThermalValue, cv::Point((hX + 2) * scale, (hY + 7) * scale), font, fontScale, white, 1);
+            if (highPoint) {
+                // highest temp dot
+                cv::circle(scaledImage, cv::Point(hX * scale, hY * scale), 1, black, 2);
+                cv::circle(scaledImage, cv::Point(hX * scale, hY * scale), 1, red, 1);
+                // get temp at highest point
+                if (highLowLabel) {
+                    std::string highestThermalValue = getThermalValue(thermalMat, hX, hY, tempConv);
+                    // highest temp text
+                    cv::putText(scaledImage, highestThermalValue, cv::Point((hX + 2) * scale, (hY + 7) * scale), font, fontScale, black, textBorderWidth);
+                    cv::putText(scaledImage, highestThermalValue, cv::Point((hX + 2) * scale, (hY + 7) * scale), font, fontScale, white, 1);
+                }
+            }
+            if (lowPoint) {
+                // lowest temp dot
+                cv::circle(scaledImage, cv::Point(lX * scale, lY * scale), 1, blue, 2);
+                cv::circle(scaledImage, cv::Point(lX * scale, lY * scale), 1, white, 1);
+                if (highLowLabel) {
+                    // get lowest temp value
+                    std::string lowestThermalValue = getThermalValue(thermalMat, lX, lY, tempConv);
+                    // lowest value text
+                    cv::putText(scaledImage, lowestThermalValue, cv::Point((lX + 2) * scale, (lY + 7) * scale), font, fontScale, black, textBorderWidth);
+                    cv::putText(scaledImage, lowestThermalValue, cv::Point((lX + 2) * scale, (lY + 7) * scale), font, fontScale, white, 1);
+                }
+            }
         }
         // show thermal search area and colormap text
         if (info) {
             // display colormapText
-            putText(scaledImage, colormapText, cv::Point(0, 11), font, fontScale, black, textBorderWidth);
-            putText(scaledImage, colormapText, cv::Point(0, 11), font, fontScale, white, 1);
+            cv::putText(scaledImage, colormapText, cv::Point(0, 11), font, fontScale, black, textBorderWidth);
+            cv::putText(scaledImage, colormapText, cv::Point(0, 11), font, fontScale, white, 1);
             // draw thermalSearchArea box
-            rectangle(scaledImage, cv::Point(thermalPadding*scale, thermalPadding*scale), cv::Point((256-thermalPadding)*scale, (192-thermalPadding)*scale), red, 1);
+            cv::rectangle(scaledImage, cv::Point(thermalPadding*scale, thermalPadding*scale), cv::Point((256-thermalPadding)*scale, (192-thermalPadding)*scale), red, 1);
         }
         // Write frame to videoWriter and display elapsed time if recording
         if (recording) {
@@ -238,12 +251,12 @@ int main(int argc, char* argv[]) {
             auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(currentTime - recordingStartTime);
             std::string recElapsedTime = elapsedTime(elapsed);
             // Display elapsed time
-            putText(scaledImage, recElapsedTime, cv::Point((256 * scale) - 88, 11), font, fontScale, black, textBorderWidth);
-            putText(scaledImage, recElapsedTime, cv::Point((256 * scale) - 88, 11), font, fontScale, white, 1);
+            cv::putText(scaledImage, recElapsedTime, cv::Point((256 * scale) - 88, 11), font, fontScale, black, textBorderWidth);
+            cv::putText(scaledImage, recElapsedTime, cv::Point((256 * scale) - 88, 11), font, fontScale, white, 1);
             videoWriter.write(scaledImage);
         }
         // show frame
-        imshow("CppThermalCamera", scaledImage);
+        cv::imshow(windowName, scaledImage);
         // handle key presses
         switch (cv::waitKey(37)) {
             case 'q':
@@ -290,7 +303,13 @@ int main(int argc, char* argv[]) {
                 recording = false;
                 break;
             case 'h':
-                highLow = !highLow;
+                highPoint = !highPoint;
+                break;
+            case 'k':
+                highLowLabel = !highLowLabel;
+                break;
+            case 'l':
+                lowPoint = !lowPoint;
                 break;
             case 'c':
                 crosshair = !crosshair;
@@ -318,3 +337,4 @@ int main(int argc, char* argv[]) {
     cv::destroyAllWindows();
     return 0;
 }
+
