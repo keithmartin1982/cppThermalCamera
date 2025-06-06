@@ -122,8 +122,14 @@ std::tuple<int, int, int, int> getValues(cv::Mat img) {
     return std::make_tuple(highestX, highestY, lowestX, lowestY);
 }
 
+int fixedScale(int num) {
+    double result_double = num * 2.5;
+    int result_int = static_cast<int>(std::round(result_double));
+    return result_int;
+}
 
 int main(int argc, char* argv[]) {
+    // TODO : get device number programmatically
     if (argc < 2) {
         std::cerr << "Usage: " << argv[0] << " -d <deviceInt>" << std::endl;
         return EXIT_FAILURE;
@@ -139,7 +145,6 @@ int main(int argc, char* argv[]) {
      w  | toggle temp conversion
     h l | toggle High/Low points
      k  | toggle High/Low points temp labels
-    z x | scale frame - +
     b n | thermal area - +
      m  | cycle through Colormaps
      p  | save frame to PNG file
@@ -150,7 +155,6 @@ int main(int argc, char* argv[]) {
     sprintf(windowName, "%s v%d.%d.%d", "cppThermalCamera", PROJECT_VERSION_MAJOR, PROJECT_VERSION_MINOR, PROJECT_VERSION_PATCH);
     auto recordingStartTime = std::chrono::system_clock::now();
     int mapInt = 0;
-    int scale = 2;
     bool tempConv = true;
     bool recording = false;
     bool crosshair = true;
@@ -160,7 +164,7 @@ int main(int argc, char* argv[]) {
     bool highLowLabel = false;
     int colormapsLen = static_cast<int>(colormaps.size());
     // set video source gstreamer to raw
-    char pipeline[128];
+    char pipeline[320];
     sprintf(pipeline, "v4l2src device=/dev/video%d ! video/x-raw, width=256, height=384, format=YUY2 ! appsink drop=1", deviceInt);
     cv::VideoCapture cap(pipeline, cv::CAP_GSTREAMER);
     if (!cap.isOpened()) {
@@ -198,41 +202,41 @@ int main(int argc, char* argv[]) {
         cv::applyColorMap(singleChannelMat, singleChannelMat, colormapInt);
         // scale mat
         cv::Mat scaledImage;
-        cv::resize(singleChannelMat, scaledImage, cv::Size(256 * scale, 192 * scale), 0, 0, cv::INTER_CUBIC);
+        cv::resize(singleChannelMat, scaledImage, cv::Size(fixedScale(256), fixedScale(192)), 0, 0, cv::INTER_CUBIC);
         if (crosshair) {
             // draw crosshair
-            cv::line(scaledImage, cv::Point((128 * scale) - 10, 96 * scale), cv::Point((128 * scale)+10, 96 * scale), red, 1);
-            cv::line(scaledImage, cv::Point(128 * scale, (96 * scale) - 10), cv::Point(128 * scale, (96 * scale)+10), red, 1);
+            cv::line(scaledImage, cv::Point(320 - 10, 240), cv::Point(320+10, 240), red, 1);
+            cv::line(scaledImage, cv::Point(320, 240 - 10), cv::Point(320, 240+10), red, 1);
             // get center thermal value
-            std::string centerThermalValue = getThermalValue(thermalMat, 128, 96, tempConv);
+            std::string centerThermalValue = getThermalValue(thermalMat, 320, 96, tempConv);
             // display thermal value
-            cv::putText(scaledImage, centerThermalValue, cv::Point((256* scale)-65,(192 * scale)-4), font, fontScale, black, textBorderWidth);
-            cv::putText(scaledImage, centerThermalValue, cv::Point((256* scale)-65,(192 * scale)-4), font, fontScale, white, 1);
+            cv::putText(scaledImage, centerThermalValue, cv::Point(640-65,480-4), font, fontScale, black, textBorderWidth);
+            cv::putText(scaledImage, centerThermalValue, cv::Point(640-65,480-4), font, fontScale, white, 1);
         }
         if (highPoint || lowPoint) {
             auto [hX, hY, lX, lY] = getValues(thermalMat);
             if (highPoint) {
                 // highest temp dot
-                cv::circle(scaledImage, cv::Point(hX * scale, hY * scale), 1, black, 2);
-                cv::circle(scaledImage, cv::Point(hX * scale, hY * scale), 1, red, 1);
+                cv::circle(scaledImage, cv::Point(fixedScale(hX), fixedScale(hY)), 1, black, 2);
+                cv::circle(scaledImage, cv::Point(fixedScale(hX), fixedScale(hY)), 1, red, 1);
                 // get temp at highest point
                 if (highLowLabel) {
                     std::string highestThermalValue = getThermalValue(thermalMat, hX, hY, tempConv);
                     // highest temp text
-                    cv::putText(scaledImage, highestThermalValue, cv::Point((hX + 2) * scale, (hY + 7) * scale), font, fontScale, black, textBorderWidth);
-                    cv::putText(scaledImage, highestThermalValue, cv::Point((hX + 2) * scale, (hY + 7) * scale), font, fontScale, white, 1);
+                    cv::putText(scaledImage, highestThermalValue, cv::Point(fixedScale((hX + 2)), fixedScale((hY + 7))), font, fontScale, black, textBorderWidth);
+                    cv::putText(scaledImage, highestThermalValue, cv::Point(fixedScale((hX + 2)), fixedScale((hY + 7))), font, fontScale, white, 1);
                 }
             }
             if (lowPoint) {
                 // lowest temp dot
-                cv::circle(scaledImage, cv::Point(lX * scale, lY * scale), 1, blue, 2);
-                cv::circle(scaledImage, cv::Point(lX * scale, lY * scale), 1, white, 1);
+                cv::circle(scaledImage, cv::Point(fixedScale(lX), fixedScale(lY)), 1, blue, 2);
+                cv::circle(scaledImage, cv::Point(fixedScale(lX), fixedScale(lY)), 1, white, 1);
                 if (highLowLabel) {
                     // get lowest temp value
                     std::string lowestThermalValue = getThermalValue(thermalMat, lX, lY, tempConv);
                     // lowest value text
-                    cv::putText(scaledImage, lowestThermalValue, cv::Point((lX + 2) * scale, (lY + 7) * scale), font, fontScale, black, textBorderWidth);
-                    cv::putText(scaledImage, lowestThermalValue, cv::Point((lX + 2) * scale, (lY + 7) * scale), font, fontScale, white, 1);
+                    cv::putText(scaledImage, lowestThermalValue, cv::Point(fixedScale((lX + 2)), fixedScale((lY + 7))), font, fontScale, black, textBorderWidth);
+                    cv::putText(scaledImage, lowestThermalValue, cv::Point(fixedScale((lX + 2)), fixedScale((lY + 7))), font, fontScale, white, 1);
                 }
             }
         }
@@ -242,7 +246,7 @@ int main(int argc, char* argv[]) {
             cv::putText(scaledImage, colormapText, cv::Point(0, 11), font, fontScale, black, textBorderWidth);
             cv::putText(scaledImage, colormapText, cv::Point(0, 11), font, fontScale, white, 1);
             // draw thermalSearchArea box
-            cv::rectangle(scaledImage, cv::Point(thermalPadding*scale, thermalPadding*scale), cv::Point((256-thermalPadding)*scale, (192-thermalPadding)*scale), red, 1);
+            cv::rectangle(scaledImage, cv::Point(fixedScale(thermalPadding), fixedScale(thermalPadding)), cv::Point(fixedScale(256-thermalPadding), fixedScale(192-thermalPadding)), red, 1);
         }
         // Write frame to videoWriter and display elapsed time if recording
         if (recording) {
@@ -251,8 +255,8 @@ int main(int argc, char* argv[]) {
             auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(currentTime - recordingStartTime);
             std::string recElapsedTime = elapsedTime(elapsed);
             // Display elapsed time
-            cv::putText(scaledImage, recElapsedTime, cv::Point((256 * scale) - 88, 11), font, fontScale, black, textBorderWidth);
-            cv::putText(scaledImage, recElapsedTime, cv::Point((256 * scale) - 88, 11), font, fontScale, white, 1);
+            cv::putText(scaledImage, recElapsedTime, cv::Point(fixedScale(256) - 88, 11), font, fontScale, black, textBorderWidth);
+            cv::putText(scaledImage, recElapsedTime, cv::Point(fixedScale(256) - 88, 11), font, fontScale, white, 1);
             videoWriter.write(scaledImage);
         }
         // show frame
@@ -268,16 +272,6 @@ int main(int argc, char* argv[]) {
                     mapInt++;
                 }
                 break;
-            case 'x':
-                if (!recording) {
-                    scale++;
-                }
-                break;
-            case 'z':
-                if (scale > 1 && !recording) {
-                    scale--;
-                }
-                break;
             case 'p':
                 if (!imwrite(timestampFilename(".png"), scaledImage)) {
                         std::cerr << "Could not save image!" << std::endl;
@@ -289,7 +283,7 @@ int main(int argc, char* argv[]) {
                 break;
             case 'r':
                 recordingStartTime = std::chrono::system_clock::now();
-                videoWriter.open(timestampFilename(".avi"), cv::VideoWriter::fourcc('M', 'J', 'P', 'G'), 25, cv::Size(256*scale, 192*scale));
+                videoWriter.open(timestampFilename(".avi"), cv::VideoWriter::fourcc('M', 'J', 'P', 'G'), 25, cv::Size(fixedScale(256), fixedScale(192)));
                 if (!videoWriter.isOpened()) {
                     std::cerr << "Could not open the output video file for write\n";
                     break;
