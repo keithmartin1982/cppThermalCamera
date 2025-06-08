@@ -1,13 +1,4 @@
 #include <opencv2/opencv.hpp>
-#include <iostream>
-#include <vector>
-#include <sstream>
-#include <cstdlib>
-#include <iomanip>
-#include <string>
-#include <chrono>
-#include <tuple>
-#include <ctime>
 
 #include "version.h"
 int sensorHeight = 192;
@@ -156,13 +147,13 @@ int main(int argc, char* argv[]) {
     sprintf(windowName, "%s v%d.%d.%d", "cppThermalCamera", PROJECT_VERSION_MAJOR, PROJECT_VERSION_MINOR, PROJECT_VERSION_PATCH);
     auto recordingStartTime = std::chrono::system_clock::now();
     int mapInt = 0;
-    bool tempConv = true;
+    bool tempConv = true; // true F, false C
     bool recording = false;
-    bool crosshair = false;
-    bool info = false;
-    bool lowPoint = false;
-    bool highPoint = false;
-    bool highLowLabel = false;
+    bool crosshair = true;
+    bool info = true;
+    bool lowPoint = true;
+    bool highPoint = true;
+    bool highLowLabel = true;
     int colormapsLen = static_cast<int>(colormaps.size());
     // set video source gstreamer to raw
     char pipeline[100];

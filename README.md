@@ -13,7 +13,6 @@ keymap:
      c  | toggle crosshair
      w  | toggle temp conversion
      h  | toggle High/Low points
-    z x | scale image - +
     b n | thermalSearchArea - +
      m  | cycle through Colormaps
      p  | save frame to file
@@ -21,8 +20,5 @@ keymap:
      q  | quit
 ```
 
-# Resources
-
-* [eevBlog](https://www.eevblog.com/forum/thermal-imaging/infiray-and-their-p2-pro-discussion/msg4665403/#msg4665403) encoding
-* [eevBlog](https://www.eevblog.com/forum/thermal-imaging/infiray-and-their-p2-pro-discussion/msg4666756/#msg4666756) Temperature conversion
+# TODO 
 
