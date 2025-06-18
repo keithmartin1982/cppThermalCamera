@@ -122,6 +122,8 @@ int fixedScale(int num) {
 }
 
 int main(int argc, char* argv[]) {
+    pid_t pid = getpid();
+    std::cout << "Process ID: " << pid << std::endl;
     if (argc < 2) {
         std::cerr << "Usage: " << argv[0] << " -d <deviceInt>" << std::endl;
         return EXIT_FAILURE;
@@ -201,7 +203,7 @@ int main(int argc, char* argv[]) {
                 cv::line(scaledImage, cv::Point((outputWidth / 2) - 10, (outputHeight / 2)), cv::Point((outputWidth / 2) + 10, (outputHeight / 2)), red, 1);
                 cv::line(scaledImage, cv::Point((outputWidth / 2), (outputHeight / 2) - 10), cv::Point((outputWidth / 2), (outputHeight / 2) + 10), red, 1);
                 // get center thermal value
-                std::string centerThermalValue = getThermalValue(thermalMat, (outputWidth / 2), 96, tempConv);
+                std::string centerThermalValue = getThermalValue(thermalMat, sensorWidth / 2, sensorHeight / 2, tempConv);
                 // display thermal value
                 cv::putText(scaledImage, centerThermalValue, cv::Point(outputWidth - 65, outputHeight - 4), font, fontScale, black, textBorderWidth);
                 cv::putText(scaledImage, centerThermalValue, cv::Point(outputWidth - 65, outputHeight - 4), font, fontScale, white, 1);
@@ -325,4 +327,3 @@ int main(int argc, char* argv[]) {
     cv::destroyAllWindows();
     return 0;
 }
-
